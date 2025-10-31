@@ -31,18 +31,10 @@ sudo rm -rf /tmp/kraft-combined-logs
 ps -ef | grep kafka
 kill -9 <pid>
  #cleanup
-rm -rf /tmp/kraft-combined-logs
+
 
 to edit
-
 sudo nano /home/ec2-user/kafka_2.13-4.1.0/config/server.properties
-
-nano config/kraft/server.properties
-
-to chk broker
- sudo lsof -i :9092
-COMMAND   PID     USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
-java    57269 ec2-user  165u  IPv6 159523      0t0  TCP *:XmlIpcRegSvc (LISTEN)
 
 
 if success
@@ -53,30 +45,6 @@ Formatting metadata directory /tmp/kraft-combined-logs with metadata.version 4.1
 to run kafka in the background
 # Go to Kafka directory
 cd ~/kafka_2.13-4.1.0
-
-# Start Kafka (single-node KRaft)
-bin/kafka-server-start.sh -daemon config/kraft/server.properties
-tail -f /tmp/kafka-logs/server.log #check logs
-#result
-[KafkaRaftServer nodeId=1] Kafka Server started
-
-
-
-
-
-# replaced Start Zoo-keeper:
--------------------------------
-bin/zookeeper-server-start.sh config/zookeeper.properties#
-
-Open another window to start kafka
-But first ssh to to your ec2 machine as done above
-
-
-hostname -I
-gives private ip
-curl ifconfig.me
-gives public ip
-
 
 Start Kafka-server:
 ----------------------------------------
@@ -103,14 +71,6 @@ to list existing topic
 -----------------------
 bin/kafka-topics.sh --list --bootstrap-server <your-ec2-public-ip>:9092
 
-
-3️⃣ Describe your topic
-
-To verify metadata:
-------------------
-
-bin/kafka-topics.sh --describe --topic demotopic --bootstrap-server <your-ec2-public-ip>:9092
-
 Start Producer:
 --------------------------
 bin/kafka-console-producer.sh --topic demotopic --bootstrap-server 3.136.155.161:9092 
@@ -121,13 +81,10 @@ Duplicate the session & enter in a new console --
 cd kafka_2.12-3.3.1
 bin/kafka-console-consumer.sh --topic demotopic --bootstrap-server 3.136.155.161:9092
 
-
 to check if borker responds
 ----------------------------
 cd kafka_2.13-4.1.0
 bin/kafka-topics.sh --list --bootstrap-server <your-ec2-public-ip>:9092
-
-
 
 if address already in use when kafka start error
 
@@ -137,106 +94,12 @@ ss -tulnp | grep -E "9092|9093"
 
 
 
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ bin/kafka-topics.sh --describe --topic demotopic --bootstrap-server 52.15.165.198:9092
+ bin/kafka-topics.sh --describe --topic demotopic --bootstrap-server 52.15.165.198:9092
 Topic: demotopic        TopicId: oZpZXcmIQvmQaUszpTYGPw PartitionCount: 1       ReplicationFactor: 1    Configs: min.insync.replicas=1
         Topic: demotopic        Partition: 0    Leader: 1       Replicas: 1     Isr: 1  Elr:    LastKnownElr:
 
 
 
-go to ondrive\documente-kafka\project-paste ssh and connect to ec2 machine in every console
-
-first console
-
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ nano config/kraft/server.properties //check listners and active.listners
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ sudo rm -rf /tmp/kraft-combined-logs //kill kafka
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ ss -tulnp | grep -E "9092|9093" //check ports
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ bin/kafka-storage.sh format --config config/kraft/server.properties --cluster-id $(bin/kafka-storage.sh random-uuid) //bind to a clusterid
-Formatting metadata directory /tmp/kraft-combined-logs with metadata.version 4.1-IV1.
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$
 
 
-second console(kafka)
-
-[ec2-user@ip-172-31-46-220 ~]$ export KAFKA_HEAP_OPTS="-Xmx256M -Xms128M"
-[ec2-user@ip-172-31-46-220 ~]$ cd kafka_2.13-4.1.0
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ bin/kafka-server-start.sh config/kraft/server.properties //this will start kafka server
-
-
-Third console(topic and producer)
-
-[ec2-user@ip-172-31-46-220 ~]$ cd kafka_2.13-4.1.0
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ bin/kafka-topics.sh --create --topic demotopic --bootstrap-server 52.15.165.198:9092 --replication-factor 1 --partitions 1
-Created topic demotopic.
-[ec2-user@ip-172-31-46-220 kafka_2.13-4.1.0]$ bin/kafka-console-producer.sh --topic demotopic --bootstrap-server 52.15.165.198:9092
-
-Fourth console(consumer)
-
-
-fixing kafka memory problem
---------------------------
-Perfect! Here’s a ready-to-run sequence for a small EC2 instance (~1 GB RAM) that will safely start Kafka:
-
-# 1️⃣ Add 2GB swap if none exists
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-
-# 2️⃣ Verify swap
-free -h
-
-# 3️⃣ Start Kafka with low heap memory (fits micro instance)
-KAFKA_HEAP_OPTS="-Xmx256M -Xms128M" nohup bin/kafka-server-start.sh config/server.properties > kafka.log 2>&1 &
-
-# 4️⃣ Wait a few seconds, then check if Kafka started
-sleep 5
-ps -ef | grep kafka
-tail -n 30 kafka.log
-
-
-✅ What this does:
-
-Adds virtual memory so Kafka can run without “Out of memory” errors.
-
-Limits Kafka JVM heap to 256 MB max / 128 MB min.
-
-Starts Kafka in the background and logs to kafka.log.
-
-After this, you can test connectivity:
-
-bin/kafka-broker-api-versions.sh --bootstrap-server 52.15.165.198:9092
-
-
-If it returns version info, Kafka is fully up and running.
-
-
-
-3️⃣ Restart Kafka
-nohup bin/kafka-server-start.sh config/kraft/server.properties > kafka.log 2>&1 &
-tail -f kafka.log
-
-
-
-check status
---------------
- netstat -tulnp | grep 9092
-
-(Not all processes could be identified, non-owned process info
- will not be shown, you would have to be root to see it all.)
-tcp6       0      0 :::9092                 :::*                    LISTEN      2616/java
-
-means jvm runs on ipv6
-
-
-
-3️⃣ Force Java to prefer IPv4
-
-Edit your Kafka start script to prefer IPv4:
-
-nano ~/kafka_2.13-4.1.0/bin/kafka-server-start.sh
-
-
-At the very top (right after #!/bin/bash), add this line:
-
-export KAFKA_OPTS="-Djava.net.preferIPv4Stack=true"
 
